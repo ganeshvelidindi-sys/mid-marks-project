@@ -7,13 +7,13 @@ dotenv.config();
 
 const app = express();
 
-// ✅ CORS (IMPORTANT)
+// ✅ CORS
 app.use(cors({
   origin: "https://vemumidmarks.vercel.app",
   credentials: true
 }));
 
-app.options('*', cors()); // handles preflight requests
+app.options('*', cors());
 
 // ✅ Middleware
 app.use(express.json());
@@ -36,7 +36,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ✅ MongoDB Connection
+// ✅ MongoDB
 async function connectDB() {
   try {
     console.log("🔄 Connecting to MongoDB...");
@@ -51,18 +51,17 @@ async function connectDB() {
   }
 }
 
-// ✅ Start Server
+// ✅ Start server
 connectDB().then(async () => {
   await seedData();
 
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📡 API: http://localhost:${PORT}/api`);
   });
 });
 
-// ✅ Seed Data
+// ✅ Seed data (UNCHANGED)
 async function seedData() {
   const User = require('./models/User');
   const Settings = require('./models/Settings');
@@ -70,7 +69,6 @@ async function seedData() {
   const bcrypt = require('bcryptjs');
 
   try {
-    // Backfill student users
     const students = await Student.find();
     let created = 0;
 
@@ -102,7 +100,6 @@ async function seedData() {
       console.log(`✅ Created ${created} student accounts`);
     }
 
-    // Admin user
     const adminExists = await User.findOne({ role: 'admin' });
 
     if (!adminExists) {
@@ -119,7 +116,6 @@ async function seedData() {
       console.log('✅ Admin created: admin / admin123');
     }
 
-    // Settings
     const settingsExist = await Settings.findOne();
 
     if (!settingsExist) {
