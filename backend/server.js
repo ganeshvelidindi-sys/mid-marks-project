@@ -8,8 +8,11 @@ dotenv.config();
 const app = express();
 
 // Middleware
+const cors = require("cors");
+import cors from "cors";
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
+  origin: "https://vemumidmarks.vercel.app",
   credentials: true
 }));
 app.use(express.json());
