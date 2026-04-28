@@ -7,13 +7,14 @@ dotenv.config();
 
 const app = express();
 
-// ✅ CORS
+// ✅ CORS (THIS IS ENOUGH)
 app.use(cors({
   origin: "https://vemumidmarks.vercel.app",
   credentials: true
 }));
 
-app.options('*', cors());
+// ❌ REMOVE THIS LINE (CAUSES CRASH)
+// app.options('*', cors());
 
 // ✅ Middleware
 app.use(express.json());
@@ -61,7 +62,7 @@ connectDB().then(async () => {
   });
 });
 
-// ✅ Seed data (UNCHANGED)
+// ✅ Seed data (same as yours)
 async function seedData() {
   const User = require('./models/User');
   const Settings = require('./models/Settings');
