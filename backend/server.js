@@ -7,17 +7,18 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
-const cors = require("cors");
-import cors from "cors";
-
+// ✅ CORS (IMPORTANT)
 app.use(cors({
   origin: "https://vemumidmarks.vercel.app",
   credentials: true
 }));
+
+app.options('*', cors()); // handles preflight requests
+
+// ✅ Middleware
 app.use(express.json());
 
-// Routes
+// ✅ Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/students', require('./routes/students'));
@@ -26,46 +27,42 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/activity', require('./routes/activity'));
 
-// Health check
+// ✅ Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'VEMU Backend Running', timestamp: new Date() });
-});
-
-// MongoDB Connection — tries SRV first, falls back to direct connection string
-async function connectDB() {
-  const uris = [
-    process.env.MONGO_URI,
-    process.env.MONGO_URI_DIRECT,
-  ].filter(Boolean);
-
-  for (const uri of uris) {
-    try {
-      const label = uri.startsWith('mongodb+srv') ? 'SRV' : 'Direct';
-      console.log(`🔄 Trying MongoDB ${label} connection...`);
-      await mongoose.connect(uri, {
-        serverSelectionTimeoutMS: 8000,
-        connectTimeoutMS: 10000,
-      });
-      console.log(`✅ MongoDB Connected Successfully (${label})`);
-      return true;
-    } catch (err) {
-      console.warn(`⚠️  ${err.message}`);
-    }
-  }
-  console.error('❌ All MongoDB connection attempts failed.');
-  console.error('👉 FIX: Go to MongoDB Atlas → Network Access → Add IP Address → Allow Access from Anywhere (0.0.0.0/0)');
-  process.exit(1);
-}
-
-connectDB().then(async () => {
-  await seedData();
-  app.listen(process.env.PORT || 5000, () => {
-    console.log(`🚀 VEMU Server running on port ${process.env.PORT || 5000}`);
-    console.log(`📡 API available at http://localhost:${process.env.PORT || 5000}/api`);
+  res.json({
+    status: 'OK',
+    message: 'VEMU Backend Running',
+    timestamp: new Date()
   });
 });
 
-// Seed initial admin and settings
+// ✅ MongoDB Connection
+async function connectDB() {
+  try {
+    console.log("🔄 Connecting to MongoDB...");
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 10000,
+    });
+    console.log("✅ MongoDB Connected");
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:", err.message);
+    process.exit(1);
+  }
+}
+
+// ✅ Start Server
+connectDB().then(async () => {
+  await seedData();
+
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 API: http://localhost:${PORT}/api`);
+  });
+});
+
+// ✅ Seed Data
 async function seedData() {
   const User = require('./models/User');
   const Settings = require('./models/Settings');
@@ -73,12 +70,18 @@ async function seedData() {
   const bcrypt = require('bcryptjs');
 
   try {
+    // Backfill student users
     const students = await Student.find();
-    let backfilled = 0;
+    let created = 0;
+
     for (const student of students) {
-      const userExists = await User.findOne({ username: student.rollNo.toUpperCase() });
-      if (!userExists) {
+      const exists = await User.findOne({
+        username: student.rollNo.toUpperCase()
+      });
+
+      if (!exists) {
         const hash = await bcrypt.hash(student.rollNo, 10);
+
         await User.create({
           username: student.rollNo.toUpperCase(),
           password: hash,
@@ -90,41 +93,50 @@ async function seedData() {
           phone: student.phone,
           active: true
         });
-        backfilled++;
+
+        created++;
       }
     }
-    if (backfilled > 0) console.log(`✅ Provisioned ${backfilled} missing Student User accounts.`);
+
+    if (created > 0) {
+      console.log(`✅ Created ${created} student accounts`);
+    }
+
+    // Admin user
+    const adminExists = await User.findOne({ role: 'admin' });
+
+    if (!adminExists) {
+      const hash = await bcrypt.hash('admin123', 10);
+
+      await User.create({
+        username: 'admin',
+        password: hash,
+        name: 'System Administrator',
+        role: 'admin',
+        active: true
+      });
+
+      console.log('✅ Admin created: admin / admin123');
+    }
+
+    // Settings
+    const settingsExist = await Settings.findOne();
+
+    if (!settingsExist) {
+      await Settings.create({
+        mid_exam_max: 25,
+        assignment_max: 5,
+        total_max: 30,
+        branches: ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'AI&ML', 'IT'],
+        semesters: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'],
+        sections: ['A', 'B', 'C'],
+        academic_year: '2025-26'
+      });
+
+      console.log('✅ Default settings created');
+    }
+
   } catch (err) {
-    console.error('Error backfilling students:', err);
-  }
-
-
-  const adminExists = await User.findOne({ role: 'admin' });
-  if (!adminExists) {
-    const bcrypt = require('bcryptjs');
-    const hash = await bcrypt.hash('admin123', 10);
-    await User.create({
-      username: 'admin',
-      password: hash,
-      name: 'System Administrator',
-      role: 'admin',
-      department: '',
-      active: true
-    });
-    console.log('✅ Admin user seeded: admin / admin123');
-  }
-
-  const settingsExist = await Settings.findOne();
-  if (!settingsExist) {
-    await Settings.create({
-      mid_exam_max: 25,
-      assignment_max: 5,
-      total_max: 30,
-      branches: ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'AI&ML', 'IT'],
-      semesters: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'],
-      sections: ['A', 'B', 'C'],
-      academic_year: '2025-26'
-    });
-    console.log('✅ Default settings seeded');
+    console.error("Seed error:", err.message);
   }
 }
