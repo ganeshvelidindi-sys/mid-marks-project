@@ -7,20 +7,17 @@ dotenv.config();
 
 const app = express();
 
-
-// ✅ CORS (FIXED)
+// ✅ CORS (THIS IS ENOUGH)
 app.use(cors({
   origin: "https://vemumidmarks.vercel.app",
   credentials: true
 }));
 
-// ✅ IMPORTANT (preflight fix)
-app.options('*', cors());
-
+// ❌ REMOVE THIS LINE (CAUSES CRASH)
+// app.options('*', cors());
 
 // ✅ Middleware
 app.use(express.json());
-
 
 // ✅ Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -31,7 +28,6 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/activity', require('./routes/activity'));
 
-
 // ✅ Health check
 app.get('/api/health', (req, res) => {
   res.json({
@@ -41,8 +37,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-
-// ✅ MongoDB connection
+// ✅ MongoDB
 async function connectDB() {
   try {
     console.log("🔄 Connecting to MongoDB...");
@@ -57,7 +52,6 @@ async function connectDB() {
   }
 }
 
-
 // ✅ Start server
 connectDB().then(async () => {
   await seedData();
@@ -68,8 +62,7 @@ connectDB().then(async () => {
   });
 });
 
-
-// ✅ Seed data
+// ✅ Seed data (same as yours)
 async function seedData() {
   const User = require('./models/User');
   const Settings = require('./models/Settings');
