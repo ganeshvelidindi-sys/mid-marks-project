@@ -12,21 +12,32 @@ const allowedOrigins = [
   "https://vemumidmarks.vercel.app",
   "http://localhost:3000",
   "http://localhost:3001",
-  "http://localhost:5173"
+  "http://localhost:5173",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  "http://127.0.0.1:5173"
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+    // Allow localhost, 127.0.0.1, and the production URL
+    const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1');
+    if (isLocal || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(null, true);
   },
   credentials: true
 }));
+
+// ✅ Request Logger (to debug connection issues)
+app.use((req, res, next) => {
+  console.log(`${new Date().toLocaleTimeString()} - ${req.method} ${req.url} [Origin: ${req.headers.origin || 'None'}]`);
+  next();
+});
 
 // ❌ REMOVE THIS LINE (CAUSES CRASH)
 // app.options('*', cors());
