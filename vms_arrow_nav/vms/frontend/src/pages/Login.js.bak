@@ -1,0 +1,342 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { useAuth } from '../context/AuthContext';
+import vemuLogo from '../assets/vemu-logo.jpg';
+
+const loginStyles = `
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(40px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes logoIn   { from{opacity:0;transform:scale(0.5) rotate(-15deg)} to{opacity:1;transform:scale(1) rotate(0)} }
+  @keyframes float    { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-12px)} }
+  @keyframes floatB   { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-8px)} }
+  @keyframes spin     { to{transform:rotate(360deg)} }
+  @keyframes overlayIn{ from{opacity:0} to{opacity:1} }
+  @keyframes pulse    { 0%,100%{opacity:0.6} 50%{opacity:1} }
+  @keyframes slideIn  { from{opacity:0;transform:scale(0.9) translateY(20px)} to{opacity:1;transform:scale(1) translateY(0)} }
+
+  .login-wrap  { animation: fadeUp 0.8s cubic-bezier(0.34,1.56,0.64,1) both; }
+  .logo-anim   { animation: logoIn 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.3s both; }
+  .popup-anim  { animation: slideIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
+  .orb1 { animation: float  7s ease-in-out infinite; }
+  .orb2 { animation: floatB 9s ease-in-out infinite 1s; }
+  .orb3 { animation: float  11s ease-in-out infinite 2s; }
+
+  .login-input {
+    width:100%; padding:14px 18px; border-radius:14px; font-size:14px; font-weight:600;
+    outline:none; box-sizing:border-box; transition:all 0.3s;
+    background:rgba(255,255,255,0.07); border:1.5px solid rgba(255,255,255,0.15);
+    color:#fff; backdrop-filter:blur(10px);
+  }
+  .login-input:focus {
+    background:rgba(255,255,255,0.12); border-color:rgba(139,92,246,0.8);
+    box-shadow:0 0 0 4px rgba(139,92,246,0.2);
+  }
+  .login-input::placeholder { color:rgba(255,255,255,0.35); font-weight:400; }
+
+  .login-btn {
+    width:100%; padding:15px; border-radius:14px; font-size:15px; font-weight:800;
+    cursor:pointer; transition:all 0.3s; letter-spacing:0.5px; border:none; color:white;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 50%, #4f46e5 100%);
+    box-shadow: 0 6px 24px rgba(109,40,217,0.5);
+    position:relative; overflow:hidden;
+  }
+  .login-btn::before {
+    content:''; position:absolute; top:0; left:-100%; width:100%; height:100%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);
+    transition:left 0.5s;
+  }
+  .login-btn:hover:not(:disabled)::before { left:100%; }
+  .login-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 10px 32px rgba(109,40,217,0.6); }
+  .login-btn:active:not(:disabled) { transform:translateY(0px); }
+  .login-btn:disabled { opacity:0.6; cursor:not-allowed; }
+
+  .tab-btn {
+    flex:1; padding:13px 8px; border:none; cursor:pointer; font-size:13.5px; font-weight:700;
+    transition:all 0.25s; letter-spacing:0.3px; position:relative;
+    background:transparent; color:rgba(255,255,255,0.45);
+  }
+  .tab-btn.active {
+    color:#fff;
+    background:rgba(139,92,246,0.2);
+  }
+  .tab-btn.active::after {
+    content:''; position:absolute; bottom:0; left:20%; right:20%; height:2.5px;
+    background:linear-gradient(90deg,#8b5cf6,#6366f1);
+    border-radius:2px;
+  }
+  .tab-btn:hover:not(.active) { color:rgba(255,255,255,0.7); background:rgba(255,255,255,0.05); }
+
+  .field-label {
+    display:block; font-size:12px; font-weight:700; color:rgba(255,255,255,0.6);
+    margin-bottom:8px; letter-spacing:0.8px; text-transform:uppercase;
+  }
+
+  .popup-btn {
+    padding:13px 16px; border-radius:12px; font-weight:700; font-size:14px;
+    cursor:pointer; transition:all 0.2s; width:100%;
+  }
+  .popup-btn:hover { transform:translateY(-1px); }
+
+  .stat-pill {
+    display:flex; align-items:center; gap:6px; padding:7px 14px;
+    background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12);
+    border-radius:30px; font-size:11.5px; font-weight:700; color:rgba(255,255,255,0.85);
+    backdrop-filter:blur(8px);
+  }
+  .stat-pill-dot { width:6px; height:6px; border-radius:50%; animation:pulse 2s ease-in-out infinite; }
+`;
+
+export default function Login() {
+  const [activeTab,     setActiveTab]     = useState('Faculty');
+  const [rollNumber,    setRollNumber]    = useState('');
+  const [password,      setPassword]      = useState('');
+  const [showPass,      setShowPass]      = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [showRolePopup, setShowRolePopup] = useState(false);
+  const [showDeptPopup, setShowDeptPopup] = useState(false);
+  const [hodDepts,      setHodDepts]      = useState([]);
+  const [pendingCreds,  setPendingCreds]  = useState(null);
+
+  const { login } = useAuth();
+  const navigate  = useNavigate();
+  const roleRoutes = { admin:'/admin', hod:'/hod', faculty:'/faculty', student:'/student' };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!rollNumber.trim() || !password.trim()) { toast.error('Please enter credentials'); return; }
+    setLoading(true);
+    try {
+      const tabType = activeTab === 'Student' ? 'student' : 'faculty';
+      const result  = await login(rollNumber.trim(), password, tabType);
+      if (result.requiresRoleSelection) {
+        setHodDepts(result.hodDepartments || []);
+        setPendingCreds({ rollNumber: rollNumber.trim(), password, tabType });
+        setShowRolePopup(true);
+        return;
+      }
+      toast.success(`Welcome, ${result.name}!`);
+      navigate(roleRoutes[result.role] || '/');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Login failed. Check your credentials.');
+    } finally { setLoading(false); }
+  };
+
+  const handleRoleChoice = async (choice) => {
+    setShowRolePopup(false);
+    if (choice === 'faculty') {
+      setLoading(true);
+      try { const user = await login(pendingCreds.rollNumber, pendingCreds.password, pendingCreds.tabType, 'faculty'); toast.success(`Welcome, ${user.name}!`); navigate('/faculty'); }
+      catch { toast.error('Login failed'); } finally { setLoading(false); }
+    } else {
+      if (hodDepts.length > 1) setShowDeptPopup(true);
+      else await loginAsHod(hodDepts[0]?._id);
+    }
+  };
+
+  const loginAsHod = async (deptId) => {
+    setShowDeptPopup(false); setLoading(true);
+    try { const user = await login(pendingCreds.rollNumber, pendingCreds.password, pendingCreds.tabType, 'hod', deptId); toast.success(`Welcome, ${user.name}! (HOD)`); navigate('/hod'); }
+    catch { toast.error('Login failed'); } finally { setLoading(false); }
+  };
+
+  const handleTabChange = (tab) => { setActiveTab(tab); setRollNumber(''); setPassword(''); };
+
+  const Popup = ({ children }) => (
+    <div style={{ position:'fixed',inset:0,background:'rgba(10,10,30,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,backdropFilter:'blur(8px)' }}>
+      <div className="popup-anim" style={{ background:'linear-gradient(145deg,#1e1b4b,#2d2a6e)',border:'1px solid rgba(139,92,246,0.3)',borderRadius:22,padding:'36px 28px',maxWidth:380,width:'90%',boxShadow:'0 30px 80px rgba(0,0,0,0.5)' }}>
+        {children}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center',
+      fontFamily:"'Segoe UI',system-ui,sans-serif", position:'relative', overflow:'hidden',
+      background:'linear-gradient(145deg,#0a0118 0%,#0f0c29 30%,#1a1040 60%,#0d0b20 100%)' }}>
+      <style>{loginStyles}</style>
+
+      {/* Animated orbs */}
+      <div style={{ position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none' }}>
+        <div className="orb1" style={{ position:'absolute',top:'-15%',left:'-8%',width:550,height:550,borderRadius:'50%',background:'radial-gradient(circle,rgba(139,92,246,0.18) 0%,transparent 65%)',filter:'blur(30px)' }}/>
+        <div className="orb2" style={{ position:'absolute',bottom:'-20%',right:'-10%',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 65%)',filter:'blur(30px)' }}/>
+        <div className="orb3" style={{ position:'absolute',top:'35%',left:'60%',width:380,height:380,borderRadius:'50%',background:'radial-gradient(circle,rgba(79,70,229,0.12) 0%,transparent 65%)',filter:'blur(40px)' }}/>
+        {/* Stars */}
+        {[...Array(30)].map((_,i)=>(
+          <div key={i} style={{
+            position:'absolute',
+            left:`${(i*37+13)%100}%`, top:`${(i*53+7)%100}%`,
+            width: i%5===0?3:i%3===0?2:1.5, height: i%5===0?3:i%3===0?2:1.5,
+            borderRadius:'50%', background:'rgba(255,255,255,0.6)',
+            animation:`pulse ${2+i%4}s ease-in-out infinite ${i*0.15}s`
+          }}/>
+        ))}
+        {/* Grid */}
+        <div style={{ position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px)',backgroundSize:'60px 60px' }}/>
+      </div>
+
+      {/* Popups */}
+      {showRolePopup && (
+        <Popup>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ width:64,height:64,borderRadius:'50%',background:'linear-gradient(135deg,#8b5cf6,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 16px',boxShadow:'0 8px 24px rgba(139,92,246,0.4)' }}>👤</div>
+            <h2 style={{ margin:'0 0 6px',fontSize:20,fontWeight:900,color:'#fff' }}>Choose Login Type</h2>
+            <p style={{ margin:'0 0 24px',fontSize:13.5,color:'rgba(255,255,255,0.5)' }}>You have both Faculty and HOD access.</p>
+            <div style={{ display:'flex',gap:12,flexDirection:'column' }}>
+              <button className="popup-btn" onClick={() => handleRoleChoice('faculty')} style={{ border:'1.5px solid rgba(139,92,246,0.5)',background:'rgba(139,92,246,0.12)',color:'#c4b5fd' }}>👩‍🏫 Login as Faculty</button>
+              <button className="popup-btn" onClick={() => handleRoleChoice('hod')} style={{ border:'none',background:'linear-gradient(135deg,#8b5cf6,#4f46e5)',color:'white',boxShadow:'0 4px 18px rgba(139,92,246,0.5)' }}>🧑‍💼 Login as HOD</button>
+            </div>
+          </div>
+        </Popup>
+      )}
+      {showDeptPopup && (
+        <Popup>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ width:64,height:64,borderRadius:'50%',background:'linear-gradient(135deg,#8b5cf6,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 16px',boxShadow:'0 8px 24px rgba(139,92,246,0.4)' }}>🏢</div>
+            <h2 style={{ margin:'0 0 6px',fontSize:20,fontWeight:900,color:'#fff' }}>Select Department</h2>
+            <p style={{ margin:'0 0 20px',fontSize:13.5,color:'rgba(255,255,255,0.5)' }}>Which department do you want to manage?</p>
+            <div style={{ display:'flex',gap:10,flexDirection:'column' }}>
+              {hodDepts.map(dept => (
+                <button key={dept._id} className="popup-btn" onClick={() => loginAsHod(dept._id)}
+                  style={{ border:'1.5px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.06)',color:'#fff',textAlign:'left',display:'flex',alignItems:'center',gap:12 }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(139,92,246,0.6)';e.currentTarget.style.background='rgba(139,92,246,0.15)';}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.background='rgba(255,255,255,0.06)';}}>
+                  <span style={{ fontSize:24 }}>🏛</span>
+                  <div style={{ textAlign:'left' }}>
+                    <div style={{ fontWeight:800 }}>{dept.name}</div>
+                    <div style={{ fontSize:12,color:'#a78bfa' }}>{dept.code}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </Popup>
+      )}
+
+      {/* Main card */}
+      <div className="login-wrap" style={{ width:460,maxWidth:'94vw',position:'relative',zIndex:1 }}>
+
+        {/* Glow ring */}
+        <div style={{ position:'absolute',inset:-1,borderRadius:28,background:'linear-gradient(135deg,rgba(139,92,246,0.6),rgba(99,102,241,0.3),rgba(109,40,217,0.6))',filter:'blur(16px)',opacity:0.7,zIndex:-1 }}/>
+
+        <div style={{ borderRadius:26,overflow:'hidden',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)',background:'rgba(15,12,40,0.85)',boxShadow:'0 40px 100px rgba(0,0,0,0.6)' }}>
+
+          {/* === HEADER === */}
+          <div style={{ padding:'36px 32px 28px',textAlign:'center',position:'relative',overflow:'hidden',
+            background:'linear-gradient(160deg,rgba(139,92,246,0.25) 0%,rgba(99,102,241,0.15) 50%,rgba(79,70,229,0.1) 100%)' }}>
+
+            {/* Decorative arcs */}
+            <div style={{ position:'absolute',top:-60,right:-60,width:200,height:200,borderRadius:'50%',border:'1px solid rgba(139,92,246,0.15)' }}/>
+            <div style={{ position:'absolute',top:-40,right:-40,width:140,height:140,borderRadius:'50%',border:'1px solid rgba(139,92,246,0.1)' }}/>
+            <div style={{ position:'absolute',bottom:-50,left:-50,width:160,height:160,borderRadius:'50%',border:'1px solid rgba(99,102,241,0.12)' }}/>
+
+            {/* Logo */}
+            <div className="logo-anim" style={{ position:'relative',display:'inline-block',marginBottom:18 }}>
+              <div style={{ width:96,height:96,borderRadius:'50%',overflow:'hidden',margin:'0 auto',
+                border:'2.5px solid rgba(139,92,246,0.5)',
+                boxShadow:'0 0 0 6px rgba(139,92,246,0.12),0 12px 40px rgba(0,0,0,0.5)',
+                position:'relative',zIndex:1 }}>
+                <img src={vemuLogo} alt="VEMU" style={{ width:'100%',height:'100%',objectFit:'cover' }} />
+              </div>
+              {/* Spinning ring */}
+              <div style={{ position:'absolute',inset:-6,borderRadius:'50%',
+                border:'2px dashed rgba(139,92,246,0.3)',
+                animation:'spin 12s linear infinite' }}/>
+            </div>
+
+            <h1 style={{ fontSize:20,fontWeight:900,margin:'0 0 5px',color:'#fff',letterSpacing:0.3 }}>
+              VEMU Institute of Technology
+            </h1>
+            <p style={{ fontSize:10.5,margin:'0 0 20px',color:'rgba(167,139,250,0.8)',letterSpacing:3.5,textTransform:'uppercase',fontWeight:700 }}>
+              Mid Marks Management System
+            </p>
+
+            {/* Stat pills */}
+            <div style={{ display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap' }}>
+              <div className="stat-pill"><div className="stat-pill-dot" style={{ background:'#10b981' }}/> Mid Marks</div>
+              <div className="stat-pill"><div className="stat-pill-dot" style={{ background:'#6366f1' }}/> Reports</div>
+              <div className="stat-pill"><div className="stat-pill-dot" style={{ background:'#f59e0b' }}/> HOD Approvals</div>
+            </div>
+          </div>
+
+          {/* === TABS === */}
+          <div style={{ display:'flex',borderBottom:'1px solid rgba(255,255,255,0.07)',background:'rgba(0,0,0,0.2)' }}>
+            {['Faculty','Student'].map(tab => (
+              <button key={tab} className={`tab-btn ${activeTab===tab?'active':''}`} onClick={() => handleTabChange(tab)}>
+                {tab === 'Faculty' ? '👩‍🏫' : '👨‍🎓'} {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* === FORM BODY === */}
+          <div style={{ padding:'28px 32px 32px' }}>
+
+            {/* Hint strip */}
+            <div style={{ background:'rgba(139,92,246,0.1)',border:'1px solid rgba(139,92,246,0.25)',borderRadius:12,
+              padding:'10px 16px',fontSize:12.5,marginBottom:24,color:'rgba(196,181,253,0.9)',fontWeight:600,textAlign:'center',
+              backdropFilter:'blur(4px)' }}>
+              {activeTab==='Student'
+                ? '🎓 Enter your Roll Number to sign in'
+                : '🔐 Faculty, HOD & Admin — use your Employee ID'}
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom:18 }}>
+                <label className="field-label">
+                  {activeTab==='Student' ? 'Roll Number' : 'Employee / Roll Number'}
+                </label>
+                <input className="login-input" type="text"
+                  placeholder={activeTab==='Student' ? 'e.g. 22CS1A0501' : 'e.g. FAC001 / ADMIN001'}
+                  value={rollNumber} onChange={e=>setRollNumber(e.target.value)}
+                  autoFocus autoComplete="username" />
+              </div>
+
+              <div style={{ marginBottom:28 }}>
+                <label className="field-label">Password</label>
+                <div style={{ position:'relative' }}>
+                  <input className="login-input" type={showPass?'text':'password'}
+                    placeholder="Enter your password"
+                    value={password} onChange={e=>setPassword(e.target.value)}
+                    autoComplete="current-password" style={{ paddingRight:52 }} />
+                  <button type="button" onClick={()=>setShowPass(v=>!v)} style={{
+                    position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',
+                    background:'none',border:'none',cursor:'pointer',fontSize:17,
+                    color:'rgba(255,255,255,0.4)',padding:4,lineHeight:1,transition:'color 0.2s'
+                  }}
+                  onMouseEnter={e=>e.currentTarget.style.color='rgba(255,255,255,0.8)'}
+                  onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.4)'}>
+                    {showPass ? '🙈' : '👁'}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" className="login-btn" disabled={loading}>
+                {loading
+                  ? <span style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:10 }}>
+                      <span style={{ width:16,height:16,border:'2.5px solid rgba(255,255,255,0.3)',borderTopColor:'white',borderRadius:'50%',display:'inline-block',animation:'spin 0.8s linear infinite' }}/>
+                      Signing In...
+                    </span>
+                  : '🚀 Sign In'}
+              </button>
+            </form>
+
+            <div style={{ textAlign:'center',marginTop:20,paddingTop:16,borderTop:'1px solid rgba(255,255,255,0.07)',
+              fontSize:12,color:'rgba(255,255,255,0.3)' }}>
+              Default password:&nbsp;
+              <strong style={{ color:'rgba(167,139,250,0.8)' }}>
+                {activeTab==='Student' ? 'Your Roll Number' : 'Your Employee ID'}
+              </strong>
+            </div>
+          </div>
+
+          {/* === FOOTER === */}
+          <div style={{ textAlign:'center',padding:'12px 16px',
+            borderTop:'1px solid rgba(255,255,255,0.06)',
+            background:'rgba(0,0,0,0.25)',
+            fontSize:11,color:'rgba(255,255,255,0.2)',fontWeight:600,letterSpacing:0.3 }}>
+            © 2024 VEMU Institute of Technology, P.Kothakota
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
